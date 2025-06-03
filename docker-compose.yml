@@ -3,32 +3,42 @@
 
 services:
   vote:
-    image: pokfinner/vote:latest
+    image: vote-app:latest
     depends_on:
       redis:
-        condition: service_healthy 
+        condition: service_healthy
     ports:
       - "8080:80"
     networks:
       - back-tier
 
   result:
-    image: pokfinner/result:latest
+    image: result-app:latest
     depends_on:
       db:
-        condition: service_healthy 
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: postgres
     ports:
       - "8081:80"
     networks:
       - back-tier
 
   worker:
-    image: pokfinner/worker:latest
+    image: worker-app:latest
     depends_on:
       redis:
-        condition: service_healthy 
+        condition: service_healthy
       db:
-        condition: service_healthy 
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: postgres
     networks:
       - back-tier
 
@@ -45,19 +55,24 @@ services:
   db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: "postgres"
-      POSTGRES_PASSWORD: "postgres"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     volumes:
-      - "db-data:/var/lib/postgresql/data"
-      - "./healthchecks:/healthchecks"
+      - "devops-project-1_db-data:/var/lib/postgresql/data"
+      # - "./healthchecks:/healthchecks"
     healthcheck:
-      test: /healthchecks/postgres.sh
-      interval: "5s"
+      test: ["CMD-SHELL", "pg_isready -U postgres -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
     networks:
       - back-tier
 
 volumes:
-  db-data:
+  devops-project-1_db-data:
 
 networks:
   back-tier:

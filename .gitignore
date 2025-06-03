@@ -1,0 +1,26 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log
+*.tfvars
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Docker
+*.log
+
+# Node
+node_modules/
+
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Other
+*.bak
+*.zip
