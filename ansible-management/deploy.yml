@@ -1,0 +1,165 @@
+# ---
+# - name: Deploy PostgreSQL database
+#   hosts: db
+#   become: true
+#   tasks:
+#     - name: Run postgres container
+#       community.docker.docker_container:
+#         name: postgres
+#         image: postgres:15
+#         state: started
+#         restart_policy: always
+#         env:
+#           POSTGRES_DB: "postgres"
+#           POSTGRES_USER: "postgres"
+#           POSTGRES_PASSWORD: "postgres"
+#           POSTGRES_INITDB_ARGS: "--auth-host=md5"
+#         ports:
+#           - "5432:5432"
+#         recreate: yes
+
+# - name: Deploy Redis and Worker backend services
+#   hosts: backend
+#   become: true
+#   tasks:
+#     - name: Run redis container
+#       community.docker.docker_container:
+#         name: redis
+#         image: redis:alpine
+#         state: started
+#         restart_policy: always
+#         ports:
+#           - "6379:6379"
+#         command: redis-server --bind 0.0.0.0 # Critical fix
+#         recreate: yes
+
+#     - name: Run worker container
+#       community.docker.docker_container:
+#         name: worker
+#         image: pokfinner/worker:latest
+#         state: started
+#         restart_policy: always
+#         env:
+#           # REDIS_HOST: "{{ hostvars['backend-1']['ansible_host'] }}"
+#           REDIS_HOST: "localhost" # Since redis is on same host
+#           DB_HOST: "{{ hostvars['postgres']['ansible_host'] }}"
+#           DB_USERNAME: "postgres"
+#           DB_PASSWORD: "postgres"
+#           DB_NAME: "postgres"
+#         network_mode: host # Critical for localhost access
+#         recreate: yes
+
+# - name: Deploy Vote and Result frontends
+#   hosts: frontend
+#   become: true
+#   tasks:
+#     - name: Run vote container
+#       community.docker.docker_container:
+#         name: vote
+#         image: marlinejohn/voting-app:latest
+#         state: started
+#         restart_policy: always
+#         recreate: yes
+#         ports:
+#           - "80:80"
+#         env:
+#           REDIS_HOST: "{{ hostvars['backend-1']['ansible_host'] }}"
+#           REDIS_PORT: "6379"
+#           REDIS_SOCKET_TIMEOUT: "5"
+
+#     - name: Run result container
+#       community.docker.docker_container:
+#         name: result
+#         image: marlinejohn/result-app:latest
+#         state: started
+#         restart_policy: always
+#         ports:
+#           - "81:80"
+#         env:
+#           POSTGRES_HOST: "{{ hostvars['postgres']['ansible_host'] }}"
+#           POSTGRES_PASSWORD: "postgres"
+#           PG_DATABASE: "postgres"
+#         recreate: yes
+---
+- name: Create microservices network
+  hosts: db,backend,frontend
+  tasks:
+    - name: Ensure shared network exists
+      community.docker.docker_network:
+        name: microservices
+        driver: bridge
+
+- name: Deploy PostgreSQL
+  hosts: db
+  tasks:
+    - name: Run Postgres (with network)
+      community.docker.docker_container:
+        name: postgres
+        image: postgres:15
+        env:
+          POSTGRES_DB: "postgres"
+          POSTGRES_USER: "postgres"
+          POSTGRES_PASSWORD: "postgres"
+          POSTGRES_INITDB_ARGS: "--auth-host=md5"
+        networks:
+          - name: microservices
+            aliases:
+              - db
+        ports:
+          - "5432:5432"
+
+- name: Deploy Redis + Worker
+  hosts: backend
+  tasks:
+    - name: Run Redis (with network)
+      community.docker.docker_container:
+        name: redis
+        image: redis:alpine
+        command: redis-server --bind 0.0.0.0
+        networks:
+          - name: microservices
+            aliases:
+              - redis
+        ports:
+          - "6379:6379"
+
+    - name: Run Worker (connected to both networks)
+      community.docker.docker_container:
+        name: worker
+        image: marlinejohn/worker:latest
+        env:
+          REDIS_HOST: "redis"
+          DB_HOST: "10.0.2.91"
+          DB_USER: "postgres"
+          DB_PASSWORD: "postgres"
+        networks:
+          - name: microservices
+
+- name: Deploy Frontend Services
+  hosts: frontend
+  tasks:
+    - name: Run Vote (connected to network)
+      community.docker.docker_container:
+        name: vote
+        image: marlinejohn/voting-app:latest
+        env:
+          REDIS_HOST: "10.0.2.242" # Resolves via network
+          REDIS_PORT: "6379"
+        networks:
+          - name: microservices
+        ports:
+          - "80:80"
+
+    - name: Run Result (with network)
+      community.docker.docker_container:
+        name: result
+        image: marlinejohn/result-app:latest
+        env:
+          PG_HOST: "10.0.2.91"
+          PG_PORT: "5432"
+          PG_USER: "postgres"
+          PG_PASSWORD: "postgres"
+        networks:
+          - name: microservices
+        ports:
+          - "81:80"

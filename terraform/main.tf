@@ -46,13 +46,6 @@ resource "aws_internet_gateway" "igw" {
     Name = "marline-main-igw"
   }
 }
-resource "aws_eip" "nat_eip" {
-  vpc = true
-
-  tags = {
-    Name = "marline-nat-eip"
-  }
-}
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat_eip.id
   subnet_id     = aws_subnet.public.id
@@ -62,6 +55,13 @@ resource "aws_nat_gateway" "nat" {
   }
 
   depends_on = [aws_internet_gateway.igw]
+}
+resource "aws_eip" "nat_eip" {
+  vpc = true
+
+  tags = {
+    Name = "marline-nat-eip"
+  }
 }
 
 # Public Route Table
@@ -138,12 +138,22 @@ resource "aws_security_group" "vote_result_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  egress {
-    description = "Allow Redis outbound"
-    from_port   = 6379
-    to_port     = 6379
+
+  ingress {
+    description = "Allow Result App Access"
+    from_port   = 81
+    to_port     = 81
     protocol    = "tcp"
-    cidr_blocks = [var.private_subnet_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description     = "Allow Redis outbound"
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    cidr_blocks     = [var.private_subnet_cidr]
+    # security_groups = [aws_security_group.redis_worker_sg.id]
   }
 
   egress {
@@ -153,6 +163,14 @@ resource "aws_security_group" "vote_result_sg" {
     protocol    = "tcp"
     cidr_blocks = [var.private_subnet_cidr]
   }
+  egress {
+    description = "Allow all outbound traffic -frontend needs internet for installations"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   tags = {
     Name = "marline-vote_result_sg"
   }
@@ -168,7 +186,8 @@ resource "aws_security_group" "redis_worker_sg" {
     from_port       = 6379
     to_port         = 6379
     protocol        = "tcp"
-    security_groups = [aws_security_group.vote_result_sg.id]
+    cidr_blocks = [var.public_subnet_cidr]
+    # security_groups = [aws_security_group.vote_result_sg.id]
   }
   ingress {
     description     = "Allow SSH from Bastion host"
@@ -184,7 +203,13 @@ resource "aws_security_group" "redis_worker_sg" {
     protocol    = "tcp"
     cidr_blocks = ["10.0.0.0/16"]
   }
-
+  egress {
+    description = "Allow all outbound traffic -backend needs internet for installations"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
   tags = {
     Name = "marline-redis_worker_sg"
   }
@@ -199,7 +224,8 @@ resource "aws_security_group" "postgres_sg" {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [aws_security_group.redis_worker_sg.id]
+    cidr_blocks = [var.private_subnet_cidr]
+    # security_groups = [aws_security_group.redis_worker_sg.id]
   }
   ingress {
     description     = "Allow SSH from Bastion host"

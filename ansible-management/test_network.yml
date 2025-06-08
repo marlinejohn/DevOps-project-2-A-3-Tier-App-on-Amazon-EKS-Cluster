@@ -1,0 +1,11 @@
+- name: Test internet connectivity
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Ping external host
+      shell: curl -s https://google.com
+      register: result
+      ignore_errors: yes
+
+    - debug:
+        var: result.stdout

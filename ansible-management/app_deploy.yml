@@ -1,0 +1,52 @@
+# ---
+# - name: Deploy worker microservice
+#   hosts: backend
+#   remote_user: ubuntu
+#   become: yes
+#   tasks:
+#     - name: Update apt package index
+#       ansible.builtin.apt:
+#         update_cache: yes
+#     - name: Install Docker if not present
+#       ansible.builtin.package:
+#         name: docker.io
+#         state: present
+#     - name: Create microservices network (if not exists)
+#       docker_network:
+#         name: microservices
+#         state: present
+#     - name: Pull redis image
+#       docker_image:
+#         name: redis
+#         source: pull
+#         tag: latest
+#     - name: Run redis container
+#       docker_container:
+#         name: redis
+#         image: redis:latest
+#         state: started
+#         networks:
+#           - name: microservices
+#     - name: Pull Docker image for worker
+#       docker_image:
+#         name: pokfinner/worker
+#         source: pull
+#         tag: latest
+#     - name: Wait for PostgreSQL to be ready
+#       wait_for:
+#         host: 10.0.2.91
+#         port: 5432
+#         delay: 5
+#         timeout: 60
+#     - name: Run worker container
+#       docker_container:
+#         name: worker
+#         image: pokfinner/worker:latest
+#         state: started
+#         restart_policy: always
+#         env:
+#           ConnectionStrings__DefaultConnection: "Server=10.0.2.91;Username=postgres;Password=postgres;Database=postgres"
+#           REDIS_HOST: redis
+#           DB_HOST: 10.0.2.91
+#         networks:
+#           - name: microservices
