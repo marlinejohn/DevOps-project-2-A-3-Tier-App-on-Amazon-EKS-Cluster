@@ -47,7 +47,7 @@ jobs:
           chmod +x ./kubectl
           mkdir -p $HOME/bin
           mv ./kubectl $HOME/bin/kubectl
-          echo "::add-path::$HOME/bin"
+          echo "$HOME/bin" >> $GITHUB_PATH
 
       - name: Update kubeconfig for EKS
         run: |
